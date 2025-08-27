@@ -1,0 +1,5 @@
+{
+  "name": "Anime Cour Tracker",
+  "description": "An application to discover and track currently airing TV anime series. Find what to watch, manage your viewing progress, and get AI-powered recommendations.",
+  "requestFramePermissions": []
+}
