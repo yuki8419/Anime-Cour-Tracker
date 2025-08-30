@@ -22,6 +22,15 @@ const calculateRecommendationScore = (jikanScore: number): number => {
   return 1; // 微妙
 };
 
+// 評価スコアを5段階のおすすめ度に変換
+export const calculateRecommendationScore = (score: number): number => {
+  if (score >= 9.0) return 5; // ☆☆☆☆☆ 傑作
+  if (score >= 8.0) return 4; // ☆☆☆☆ 優秀
+  if (score >= 7.0) return 3; // ☆☆☆ 良作
+  if (score >= 6.0) return 2; // ☆☆ 普通
+  return 1; // ☆ 微妙
+};
+
 const getStreamingServices = (animeId: number): string[] => {
     if (ANIME_STREAMING_MAP[animeId]) {
         return ANIME_STREAMING_MAP[animeId];
