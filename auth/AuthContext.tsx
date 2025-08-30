@@ -17,7 +17,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Simple hardcoded password for demonstration. In a real app, this would be a secure auth flow.
   const login = (password: string): boolean => {
-    if (password === 'anicool-admin-2024') {
+    if (password === '0000') {
       sessionStorage.setItem('isAuthenticated', 'true');
       setIsAuthenticated(true);
       return true;

@@ -97,7 +97,7 @@ const HomePage: React.FC = () => {
       )}
       
       <div className="bg-surface border border-gray-200 p-4 rounded-lg shadow-sm flex flex-col md:flex-row gap-x-4 gap-y-2 items-center flex-wrap">
-          <div className="flex-1 flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap justify-center md:justify-start">
             <select
                 value={selectedYear}
                 onChange={e => setSelectedYear(Number(e.target.value))}
@@ -112,16 +112,6 @@ const HomePage: React.FC = () => {
             >
                 {seasons.map(season => <option key={season} value={season}>{seasonNames[season]}</option>)}
             </select>
-             <button
-                onClick={handleForceRefresh}
-                className="bg-gray-100 hover:bg-gray-200 text-text-secondary font-medium px-3 py-2 rounded-md transition-colors duration-200 flex items-center gap-1.5 text-sm"
-                title="最新の情報を再取得します"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0011.667 0l3.181-3.183m-4.994 0h-4.992" />
-                </svg>
-                <span>データ更新</span>
-              </button>
           </div>
           <div className="flex-shrink-0">
             <h2 className="text-lg font-semibold text-text-secondary">配信サービスで絞り込み:</h2>

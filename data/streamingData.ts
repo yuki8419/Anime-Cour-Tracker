@@ -1,5 +1,6 @@
-// This file contains curated, more realistic streaming service data for popular anime.
-// In a real-world application, this would ideally be sourced from a dedicated API.
+// This file contains curated streaming service data for popular anime.
+// Netflix and Amazon Prime Video do not provide public APIs for streaming availability.
+// This data is manually curated and should be updated by administrators through the admin panel.
 // Annict IDs are used as keys.
 
 export const ANIME_STREAMING_MAP: Record<number, string[]> = {
