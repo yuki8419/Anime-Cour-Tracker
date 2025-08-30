@@ -181,7 +181,7 @@ const AdminDashboard: React.FC = () => {
             stage: 'Jikan評価・ジャンル取得中' 
           });
           try {
-            await new Promise(resolve => setTimeout(resolve, 350)); // レート制限対応
+            await new Promise(resolve => setTimeout(resolve, 500)); // レート制限を緩和
             const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(anime.title)}&limit=1`);
             if (jikanResponse.ok) {
               const jikanData = await jikanResponse.json();
@@ -195,6 +195,7 @@ const AdminDashboard: React.FC = () => {
             }
           } catch (error) {
             console.error(`Jikan取得失敗: ${anime.title}`, error);
+            // エラーが発生してもスキップして続行
           }
         }
         
@@ -212,14 +213,33 @@ const AdminDashboard: React.FC = () => {
           if (anime.description === 'この作品のあらすじは、現在準備中です。' || 
               anime.description === 'あらすじはありません。') {
             try {
-              await new Promise(resolve => setTimeout(resolve, 500)); // レート制限対応
+              await new Promise(resolve => setTimeout(resolve, 800)); // レート制限をさらに緩和
+              
+              // タイトルをクリーンアップ（特殊文字や記号を除去）
+              const cleanTitle = anime.title
+                .replace(/[【】「」『』（）()]/g, '') // 括弧類を除去
+                .replace(/[!?！？]/g, '') // 感嘆符・疑問符を除去
+                .replace(/\s+/g, ' ') // 複数の空白を単一に
+                .trim();
+              
               const searchResponse = await fetch(
-                `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(anime.title)}`
+                `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanTitle)}`,
+                {
+                  headers: {
+                    'User-Agent': 'AnimeTracker/1.0 (https://example.com/contact)'
+                  }
+                }
               );
               
               if (searchResponse.ok) {
                 const wikiData = await searchResponse.json();
-                const wikiDescription = wikiData.extract && wikiData.extract.length > 50 ? wikiData.extract : anime.description;
+                // より詳細なチェック
+                const wikiDescription = (wikiData.extract && 
+                                       wikiData.extract.length > 50 && 
+                                       !wikiData.extract.includes('曖昧さ回避') &&
+                                       !wikiData.extract.includes('リダイレクト')) 
+                                     ? wikiData.extract 
+                                     : anime.description;
                 
                 // 既存データと統合
                 const existingData = savedData[anime.id];
@@ -240,6 +260,29 @@ const AdminDashboard: React.FC = () => {
                 };
                 saveAnimeData(dataToSave);
                 processedCount++;
+              }
+            } catch (error) {
+              console.error(`Wikipedia取得失敗: ${anime.title}`, error);
+              // エラーが発生してもスキップして続行
+              // 元のあらすじのまま保存
+              const existingData = savedData[anime.id];
+              const jikanData = jikanDataMap.get(anime.id);
+              if (jikanData) {
+                const recommendationScore = jikanData.score ? calculateRecommendationScore(jikanData.score) : (existingData?.recommendationScore || 0);
+                const dataToSave = {
+                  id: anime.id,
+                  title: existingData?.title || anime.title,
+                  description: existingData?.description || anime.description,
+                  genres: existingData?.genres || jikanData.genres || anime.genres,
+                  streamingServices: existingData?.streamingServices || anime.streamingServices,
+                  isVisible: existingData?.isVisible ?? true,
+                  customImageUrl: existingData?.customImageUrl || '',
+                  isPublished: existingData?.isPublished ?? false,
+                  lastModified: Date.now(),
+                  recommendationScore: recommendationScore,
+                };
+                saveAnimeData(dataToSave);
+                totalProcessed++;
               }
             } catch (error) {
               console.error(`Wikipedia取得失敗: ${anime.title}`, error);
@@ -363,10 +406,23 @@ const AdminDashboard: React.FC = () => {
               const jikanDataMap = new Map();
               for (const anime of seasonAnimeList) {
                 try {
-                  await new Promise(resolve => setTimeout(resolve, 350)); // レート制限対応
-                  const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(anime.title)}&limit=1`);
-                  if (jikanResponse.ok) {
-                    const jikanData = await jikanResponse.json();
+                  await new Promise(resolve => setTimeout(resolve, 800)); // レート制限をさらに緩和
+                  
+                  // タイトルをクリーンアップ
+                  const cleanTitle = anime.title
+                    .replace(/[【】「」『』（）()]/g, '')
+                    .replace(/[!?！？]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                  
+                  const searchResponse = await fetch(
+                    `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanTitle)}`,
+                    {
+                      headers: {
+                        'User-Agent': 'AnimeTracker/1.0 (https://example.com/contact)'
+                      }
+                    }
+                  );
                     const animeData = jikanData.data[0];
                     if (animeData) {
                       jikanDataMap.set(anime.id, {
@@ -396,7 +452,11 @@ const AdminDashboard: React.FC = () => {
                       const wikiData = await searchResponse.json();
                       const wikiDescription = wikiData.extract && wikiData.extract.length > 50 ? wikiData.extract : anime.description;
                       
-                      // 既存データと統合
+                    // より詳細なチェック
+                    if (wikiData.extract && 
+                        wikiData.extract.length > 50 && 
+                        !wikiData.extract.includes('曖昧さ回避') &&
+                        !wikiData.extract.includes('リダイレクト')) {
                       const existingData = savedData[anime.id];
                       const jikanData = jikanDataMap.get(anime.id);
                       const recommendationScore = jikanData?.score ? calculateRecommendationScore(jikanData.score) : (existingData?.recommendationScore || 0);
@@ -436,10 +496,9 @@ const AdminDashboard: React.FC = () => {
                       isPublished: existingData?.isPublished ?? false,
                       lastModified: Date.now(),
                       recommendationScore: recommendationScore,
-                    };
-                    saveAnimeData(dataToSave);
                     totalProcessed++;
                   }
+                  // エラーが発生してもスキップして続行
                 }
               }
             } catch (error) {
