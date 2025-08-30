@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import type { Anime } from '../../types';
-import { getAllAnimeForAdmin } from '../../services/animeService';
+import { getAllAnimeForAdmin, calculateRecommendationScore } from '../../services/animeService';
 import { getSavedAnimeData, deleteAnimeData, publishAnimeData, unpublishAnimeData, clearAdminCache } from '../../services/dataService';
 import { getGeminiRecommendation } from '../../services/geminiService';
 import { CURRENT_YEAR } from '../../constants';
