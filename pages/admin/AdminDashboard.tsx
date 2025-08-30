@@ -392,14 +392,32 @@ const AdminDashboard: React.FC = () => {
           for (const season of seasons) {
             seasonCount++;
             setProgressInfo({ 
-              current: seasonCount, 
-              total: totalSeasons, 
-              currentItem: `${year}年${seasonNames[season]}`, 
-              stage: 'シーズンデータ取得中' 
+                      await new Promise(resolve => setTimeout(resolve, 800)); // レート制限をさらに緩和
+                      
+                      // タイトルをクリーンアップ
+                      const cleanTitle = anime.title
+                        .replace(/[【】「」『』（）()]/g, '')
+                        .replace(/[!?！？]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                      
+                      const searchResponse = await fetch(
+                        `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanTitle)}`,
+                        {
+                          headers: {
+                            'User-Agent': 'AnimeTracker/1.0 (https://example.com/contact)'
+                          }
+                        }
+                      );
             });
             try {
               console.log(`処理中: ${year}年${seasonNames[season]}`);
-              const seasonIdentifier = `${year}-${season}`;
+                        const wikiDescription = (wikiData.extract && 
+                                               wikiData.extract.length > 50 && 
+                                               !wikiData.extract.includes('曖昧さ回避') &&
+                                               !wikiData.extract.includes('リダイレクト')) 
+                                             ? wikiData.extract 
+                                             : anime.description;
               const seasonAnimeList = await getAllAnimeForAdmin(seasonIdentifier);
               
               // JikanAPIで評価とジャンルを取得
