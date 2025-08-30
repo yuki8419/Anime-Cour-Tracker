@@ -243,23 +243,3 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
 };
 
 export default AnimeEditModal;
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-text-secondary bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
-            >
-              キャンセル
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
-            >
-              保存
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default AnimeEditModal;
