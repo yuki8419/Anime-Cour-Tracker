@@ -32,6 +32,12 @@ const AdminDashboard: React.FC = () => {
   const [editingAnime, setEditingAnime] = useState<Anime | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [progressInfo, setProgressInfo] = useState<{
+    current: number;
+    total: number;
+    currentItem: string;
+    stage: string;
+  } | null>(null);
 
   const fetchAnimeForAdmin = useCallback(async () => {
     setIsLoading(true);
@@ -154,6 +160,7 @@ const AdminDashboard: React.FC = () => {
   const handleBulkDataFetch = async () => {
     if (confirm('全アニメのデータを一括取得しますか？（Annict→Jikan→Wikipedia の順で処理します。時間がかかる場合があります）')) {
       setIsProcessing(true);
+      setProgressInfo({ current: 0, total: animeList.length * 2, currentItem: '', stage: '準備中' });
       try {
         let processedCount = 0;
         
@@ -162,9 +169,17 @@ const AdminDashboard: React.FC = () => {
         
         // ステップ2: JikanAPIで評価を全取得
         console.log('ステップ2: Jikan評価データ取得開始');
+        setProgressInfo({ current: 0, total: animeList.length * 2, currentItem: '', stage: 'Jikan評価・ジャンル取得中' });
         const savedData = getSavedAnimeData();
         const jikanDataMap = new Map();
-        for (const anime of animeList) {
+        for (let i = 0; i < animeList.length; i++) {
+          const anime = animeList[i];
+          setProgressInfo({ 
+            current: i + 1, 
+            total: animeList.length * 2, 
+            currentItem: anime.title, 
+            stage: 'Jikan評価・ジャンル取得中' 
+          });
           try {
             await new Promise(resolve => setTimeout(resolve, 350)); // レート制限対応
             const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(anime.title)}&limit=1`);
@@ -185,7 +200,15 @@ const AdminDashboard: React.FC = () => {
         
         // ステップ3: Wikipediaからあらすじを全取得
         console.log('ステップ3: Wikipedia情報取得開始');
-        for (const anime of animeList) {
+        setProgressInfo({ current: animeList.length, total: animeList.length * 2, currentItem: '', stage: 'Wikipedia情報取得中' });
+        for (let i = 0; i < animeList.length; i++) {
+          const anime = animeList[i];
+          setProgressInfo({ 
+            current: animeList.length + i + 1, 
+            total: animeList.length * 2, 
+            currentItem: anime.title, 
+            stage: 'Wikipedia情報取得中' 
+          });
           if (anime.description === 'この作品のあらすじは、現在準備中です。' || 
               anime.description === 'あらすじはありません。') {
             try {
@@ -252,6 +275,7 @@ const AdminDashboard: React.FC = () => {
         alert('一括データ取得に失敗しました');
       } finally {
         setIsProcessing(false);
+        setProgressInfo(null);
       }
     }
   };
@@ -311,14 +335,25 @@ const AdminDashboard: React.FC = () => {
   const handleBulkDataFetchAllSeasons = async () => {
     if (confirm('2022-2025年の全シーズンのアニメデータを一括取得しますか？（非常に時間がかかります）')) {
       setIsProcessing(true);
+      const years = [2022, 2023, 2024, 2025];
+      const seasons = ['spring', 'summer', 'autumn', 'winter'];
+      const totalSeasons = years.length * seasons.length;
+      setProgressInfo({ current: 0, total: totalSeasons, currentItem: '', stage: '全シーズン処理準備中' });
+      
       try {
-        const years = [2022, 2023, 2024, 2025];
-        const seasons = ['spring', 'summer', 'autumn', 'winter'];
         let totalProcessed = 0;
         let totalJikanData = 0;
+        let seasonCount = 0;
         
         for (const year of years) {
           for (const season of seasons) {
+            seasonCount++;
+            setProgressInfo({ 
+              current: seasonCount, 
+              total: totalSeasons, 
+              currentItem: `${year}年${seasonNames[season]}`, 
+              stage: 'シーズンデータ取得中' 
+            });
             try {
               console.log(`処理中: ${year}年${seasonNames[season]}`);
               const seasonIdentifier = `${year}-${season}`;
@@ -420,6 +455,7 @@ const AdminDashboard: React.FC = () => {
         alert('全シーズン一括データ取得に失敗しました');
       } finally {
         setIsProcessing(false);
+        setProgressInfo(null);
       }
     }
   };
@@ -541,8 +577,24 @@ const AdminDashboard: React.FC = () => {
         
         <div className="text-sm text-text-secondary">
           公開中: {publishedAnime.length}件 | 下書き: {draftAnime.length}件 | 非表示: {hiddenAnime.length}件 | 合計: {animeList.length}件
-          {isProcessing && <span className="ml-4 text-blue-600">処理中...</span>}
+          {isProcessing && progressInfo && (
+            <div className="ml-4 text-blue-600">
+              <span className="font-medium">{progressInfo.stage}</span>
+              <span className="ml-2">({progressInfo.current}/{progressInfo.total})</span>
+              {progressInfo.currentItem && <span className="ml-2 text-gray-600">- {progressInfo.currentItem}</span>}
+            </div>
+          )}
         </div>
+        
+        {/* 進捗バー */}
+        {isProcessing && progressInfo && (
+          <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-blue-500 h-full transition-all duration-300 ease-out"
+              style={{ width: `${(progressInfo.current / progressInfo.total) * 100}%` }}
+            />
+          </div>
+        )}
       </div>
 
       {isLoading ? (
