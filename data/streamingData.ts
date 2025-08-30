@@ -3,6 +3,13 @@
 // Annict IDs are used as keys.
 
 export const ANIME_STREAMING_MAP: Record<number, string[]> = {
+  // 2025 Summer (Anticipated)
+  14001: ['netflix', 'amazon_prime_video'], // 呪術廻戦 鏖殺回游
+  14002: ['amazon_prime_video'],             // ぼっち・ざ・ろっく！ SEASON 2
+  14003: ['amazon_prime_video', 'netflix'], // チェンソーマン レゼ篇
+  14004: ['netflix'],                         // 葬送のフリーレン 第2期
+  14005: ['netflix'],                         // サイバーグラディエーター・アイリス
+
   // 2024 Spring
   13139: ['netflix', 'amazon_prime_video'], // 無職転生 II ～異世界行ったら本気だす～（第2クール）
   13140: ['netflix', 'amazon_prime_video'], // この素晴らしい世界に祝福を！３

@@ -1,8 +1,6 @@
-
 import type { Anime, AnimeDetail, CastMember, StaffMember, Prequel } from '../types';
-import { ANIME_GENRES } from '../constants';
 import { ANIME_STREAMING_MAP } from '../data/streamingData';
-import { findPrequelTitle, findStreamingServices as geminiFindStreamingServices, classifyGenresBatch, translateSynopsesBatch } from './geminiService';
+import { ANIME_ENRICHMENT_DATA } from '../data/animeEnrichmentData';
 
 const ANNICT_API_URL = 'https://api.annict.com/graphql';
 // As per user request, using the provided Annict API token.
@@ -13,17 +11,12 @@ const ANIME_PER_PAGE = 30;
 const CACHE_PREFIX = 'anime_data_';
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// This function now only provides true data from our curated list.
-// It no longer falls back to random assignment to avoid showing false information.
 const getStreamingServices = (animeId: number): string[] => {
-    // Check our curated list for accurate data for popular shows.
     if (ANIME_STREAMING_MAP[animeId]) {
         return ANIME_STREAMING_MAP[animeId];
     }
-    // If not in our list, return empty to avoid showing false information.
     return [];
 };
-
 
 async function fetchAnnict(query: string, variables: Record<string, any>) {
   const response = await fetch(ANNICT_API_URL, {
@@ -67,7 +60,6 @@ const listQuery = `
   }
 `;
 
-// Helper to add delay between API calls to avoid rate limiting
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const getAnimeBySeason = async (season: string): Promise<Anime[]> => {
@@ -94,77 +86,47 @@ export const getAnimeBySeason = async (season: string): Promise<Anime[]> => {
 
   const works = (annictData?.searchWorks?.nodes || []).filter((work: any) => work.media === 'TV');
 
-  // Enrich with Jikan data (score, synopsis)
+  // Fetch supplementary data (like score) from Jikan
   const jikanFetchPromises = works.map(async (work: any) => {
     try {
-      // Jikan API has a rate limit (e.g., 3 requests per second)
-      await sleep(350);
+      await sleep(350); // Rate limiting for Jikan API
       const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(work.title)}&limit=1`);
-      if (!jikanResponse.ok) return { annictId: work.annictId, score: null, synopsis: null, title: work.title };
+      if (!jikanResponse.ok) return { annictId: work.annictId, score: null };
       const jikanData = await jikanResponse.json();
       const animeData = jikanData.data[0];
-      return {
-        annictId: work.annictId,
-        score: animeData?.score || null,
-        synopsis: animeData?.synopsis || null,
-        title: work.title,
-      };
+      return { annictId: work.annictId, score: animeData?.score || null };
     } catch (e) {
       console.error(`Failed to fetch Jikan data for ${work.title}`, e);
-      return { annictId: work.annictId, score: null, synopsis: null, title: work.title };
+      return { annictId: work.annictId, score: null };
     }
   });
 
-  const enrichedDataList = await Promise.all(jikanFetchPromises);
-  const enrichedDataMap = new Map(enrichedDataList.map(d => [d.annictId, d]));
+  const jikanDataList = await Promise.all(jikanFetchPromises);
+  const jikanDataMap = new Map(jikanDataList.map(d => [d.annictId, d]));
   
-  // Batch translate synopses with Gemini
-  const animeForTranslation = enrichedDataList.map(d => ({ title: d.title, synopsis: d.synopsis }));
-  let translatedSynopsesMap: Record<string, string> = {};
-  try {
-    translatedSynopsesMap = await translateSynopsesBatch(animeForTranslation);
-  } catch(e) {
-    console.error('Failed to translate synopses with Gemini', e);
-  }
-
-  // Batch classify genres with Gemini
-  const animeForGenreClassification = enrichedDataList.map(d => ({ title: d.title, synopsis: d.synopsis }));
-  let genresMap: Record<string, string[]> = {};
-  try {
-    genresMap = await classifyGenresBatch(animeForGenreClassification, ANIME_GENRES);
-  } catch (e) {
-    console.error('Failed to classify genres with Gemini', e);
-  }
-
   const animeList = works.map((work: any): Anime => {
-    const enriched = enrichedDataMap.get(work.annictId);
-    const translatedSynopsis = translatedSynopsesMap[work.title];
+    const jikanData = jikanDataMap.get(work.annictId);
+    const staticData = ANIME_ENRICHMENT_DATA[work.annictId];
+
     return {
       id: work.annictId,
       title: work.title,
       imageUrl: work.image?.recommendedImageUrl || work.image?.facebookOgImageUrl || 'https://picsum.photos/400/600',
       season: `${work.seasonYear}-${work.seasonName?.toLowerCase()}`,
       streamingServices: getStreamingServices(work.annictId),
-      score: enriched?.score || null,
-      genres: genresMap[work.title] || [],
-      description: translatedSynopsis || 'この作品のあらすじは、現在外部データベースで利用できません。',
+      score: jikanData?.score || null,
+      genres: staticData?.genres || [],
+      description: staticData?.description || 'この作品のあらすじは、現在準備中です。',
+      prequel: staticData?.prequel || null,
     };
   });
 
   try {
-    const cachePayload = {
-      timestamp: Date.now(),
-      data: animeList,
-    };
-    localStorage.setItem(cacheKey, JSON.stringify(cachePayload));
-    console.log(`Saved fresh data to cache for season: ${season}.`);
-  } catch (error) {
-    console.error("Error writing data to localStorage.", error);
-  }
+    localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: animeList }));
+  } catch (error) { console.error("Error writing to localStorage.", error); }
 
   return animeList;
 };
-
 
 const detailQuery = `
   query getAnimeDetailsById($id: [Int!]) {
@@ -202,12 +164,8 @@ const detailQuery = `
         staffs(orderBy: { field: SORT_NUMBER, direction: ASC }, first: 10) {
           nodes {
             resource {
-              ... on Person {
-                name
-              }
-              ... on Organization {
-                name
-              }
+              ... on Person { name }
+              ... on Organization { name }
             }
             roleText
             annictId
@@ -229,102 +187,34 @@ const searchByTitleQuery = `
   }
 `;
 
-export const fetchPrequelInfo = async (currentAnimeTitle: string): Promise<Prequel | null> => {
-  console.log(`Searching for prequel for: "${currentAnimeTitle}" using Gemini.`);
-  
-  // Step 1: Use Gemini with Google Search to find the prequel's title.
-  const prequelTitle = await findPrequelTitle(currentAnimeTitle);
-
-  if (!prequelTitle) {
-    console.log("Gemini did not find a prequel title.");
-    return null;
-  }
-  
-  console.log(`Gemini found potential prequel title: "${prequelTitle}". Searching Annict.`);
-
-  // Step 2: Use the found title to search Annict for the anime ID.
-  try {
-    const data = await fetchAnnict(searchByTitleQuery, { title: prequelTitle });
-    const prequelWork = data?.searchWorks?.nodes?.[0];
-
-    if (prequelWork?.annictId && prequelWork?.title) {
-       // Avoid linking to the same anime
-      if (prequelWork.title === currentAnimeTitle) {
-        console.log("Prequel search returned the same anime. Ignoring.");
-        return null;
-      }
-      console.log(`Found Annict ID ${prequelWork.annictId} for prequel "${prequelWork.title}".`);
-      return {
-        id: prequelWork.annictId,
-        title: prequelWork.title,
-      };
-    } else {
-      console.warn(`Could not find an exact Annict match for title: "${prequelTitle}"`);
-      return null;
-    }
-  } catch (error) {
-    console.error(`Failed to search Annict for title "${prequelTitle}":`, error);
-    return null;
-  }
-};
-
-export const fetchStreamingServices = async (title: string): Promise<string[]> => {
-  console.log(`Searching for streaming services for: "${title}" using Gemini.`);
-  try {
-    const services = await geminiFindStreamingServices(title);
-    return services;
-  } catch (error) {
-    console.error(`Failed to fetch streaming services for "${title}":`, error);
-    return [];
-  }
-};
-
 export const getAnimeDetails = async (id: number): Promise<AnimeDetail | null> => {
   console.log(`Fetching details for anime ID: ${id}`);
   const data = await fetchAnnict(detailQuery, { id: [id] });
   
   const work = data?.searchWorks?.nodes?.[0];
-
-  if (!work) {
-    return null;
-  }
+  if (!work) return null;
 
   const seasonIdentifier = `${work.seasonYear}-${work.seasonName?.toLowerCase()}`;
   const cacheKey = `${CACHE_PREFIX}${seasonIdentifier}`;
-  let descriptionFromCache = 'あらすじを読み込み中です...';
-
+  let cachedAnimeData: Anime | null = null;
   try {
     const cachedItem = localStorage.getItem(cacheKey);
     if (cachedItem) {
       const { data: cachedAnimeList } = JSON.parse(cachedItem) as { data: Anime[] };
-      const cachedAnime = cachedAnimeList.find(a => a.id === id);
-      if (cachedAnime && cachedAnime.description) {
-        descriptionFromCache = cachedAnime.description;
-      } else {
-        descriptionFromCache = 'この作品のあらすじは、一覧ページで取得されます。一覧に戻ってから再度お試しください。';
-      }
-    } else {
-        descriptionFromCache = 'この作品のあらすじは、一覧ページで取得されます。一覧に戻ってから再度お試しください。';
+      cachedAnimeData = cachedAnimeList.find(a => a.id === id) || null;
     }
-  } catch (error) {
-    console.error("Could not read description from cache for detail page", error);
-    descriptionFromCache = 'あらすじの読み込みに失敗しました。';
-  }
-  
-  const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(work.title)}&limit=1`);
-  let score = null;
-  if (jikanResponse.ok) {
-      const jikanData = await jikanResponse.json();
-      score = jikanData?.data?.[0]?.score || null;
-  }
+  } catch (error) { console.error("Could not read from cache for detail page", error); }
 
   return {
     id: work.annictId,
     title: work.title,
     imageUrl: work.image?.recommendedImageUrl || work.image?.facebookOgImageUrl || 'https://picsum.photos/400/600',
     season: `${work.seasonYear}-${work.seasonName?.toLowerCase()}`,
-    streamingServices: getStreamingServices(work.annictId),
-    description: descriptionFromCache,
+    description: cachedAnimeData?.description || 'あらすじは一覧ページで取得されます。',
+    genres: cachedAnimeData?.genres || [],
+    score: cachedAnimeData?.score || null,
+    streamingServices: cachedAnimeData?.streamingServices || [],
+    prequel: cachedAnimeData?.prequel || null,
     officialSiteUrl: work.officialSiteUrl,
     twitterUrl: work.twitterUsername ? `https://twitter.com/${work.twitterUsername}` : null,
     episodes: (work.episodes?.nodes || []).map((ep: any) => ({
@@ -346,7 +236,15 @@ export const getAnimeDetails = async (id: number): Promise<AnimeDetail | null> =
         name: s?.resource?.name,
       }))
       .filter((s): s is StaffMember => !!(s.id && s.name)),
-    genres: [], // Genres are fetched on the home page, not detail
-    score: score,
   };
 };
+
+// Deprecated functions - no longer called from DetailPage
+export const fetchPrequelInfo = async (currentAnimeTitle: string): Promise<Prequel | null> => {
+    console.warn("fetchPrequelInfo is deprecated and should not be called directly.");
+    return null;
+}
+export const fetchStreamingServices = async (title: string): Promise<string[]> => {
+    console.warn("fetchStreamingServices is deprecated and should not be called directly.");
+    return [];
+}

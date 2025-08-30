@@ -1,3 +1,4 @@
+
 export interface Anime {
   id: number;
   title: string;
@@ -7,11 +8,12 @@ export interface Anime {
   genres: string[];
   score: number | null;
   description: string;
+  prequel: Prequel | null;
 }
 
 export interface Episode {
   id: number;
-  number: string; // Annict provides numberText e.g. "第1話"
+  number: string; // Annict provides numberText e.g., "第1話"
   title: string | null;
 }
 
@@ -33,7 +35,6 @@ export interface Prequel {
 }
 
 export interface AnimeDetail extends Anime {
-  description: string;
   officialSiteUrl: string | null;
   twitterUrl: string | null;
   episodes: Episode[];

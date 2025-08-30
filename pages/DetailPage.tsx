@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import type { AnimeDetail, Prequel } from '../types';
-import { getAnimeDetails, fetchPrequelInfo, fetchStreamingServices } from '../services/animeService';
+import type { AnimeDetail } from '../types';
+import { getAnimeDetails } from '../services/animeService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Tabs from '../components/Tabs';
 import Pill from '../components/Pill';
@@ -62,10 +63,7 @@ const useWatchedEpisodes = (animeId: number | undefined) => {
 const DetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [anime, setAnime] = useState<AnimeDetail | null>(null);
-  const [prequel, setPrequel] = useState<Prequel | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [streamingServices, setStreamingServices] = useState<string[]>([]);
-  const [isStreamingLoading, setIsStreamingLoading] = useState<boolean>(true);
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
@@ -76,9 +74,6 @@ const DetailPage: React.FC = () => {
     if (!numericId) return;
     setIsLoading(true);
     setAnime(null);
-    setPrequel(null);
-    setStreamingServices([]);
-    setIsStreamingLoading(true);
     try {
       const data = await getAnimeDetails(numericId);
       setAnime(data);
@@ -95,22 +90,6 @@ const DetailPage: React.FC = () => {
     fetchDetails();
   }, [fetchDetails]);
 
-  useEffect(() => {
-    if (anime?.title) {
-      // Fetch prequel info using AI search
-      fetchPrequelInfo(anime.title).then(prequelData => {
-        if (prequelData) {
-          setPrequel(prequelData);
-        }
-      });
-      
-      // Fetch streaming info using AI search
-      setIsStreamingLoading(true);
-      fetchStreamingServices(anime.title)
-          .then(services => setStreamingServices(services))
-          .finally(() => setIsStreamingLoading(false));
-    }
-  }, [anime]);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -140,16 +119,12 @@ const DetailPage: React.FC = () => {
           </div>
           <div>
             <h3 className="text-xl font-bold mb-2 text-text-primary">配信情報</h3>
-            {isStreamingLoading ? (
-                <p className="text-text-secondary">配信情報を検索中...</p>
-            ) : (
-                <div className="flex flex-wrap gap-4">
-                {streamingServices.length > 0 ?
-                    streamingServices.map(serviceId => <StreamingIcon key={serviceId} serviceId={serviceId} />) :
-                    <p className="text-text-secondary">配信情報はまだありません。</p>
-                }
-                </div>
-            )}
+            <div className="flex flex-wrap gap-4">
+            {anime.streamingServices.length > 0 ?
+                anime.streamingServices.map(serviceId => <StreamingIcon key={serviceId} serviceId={serviceId} />) :
+                <p className="text-text-secondary">配信情報はまだありません。</p>
+            }
+            </div>
           </div>
           <div>
             <h3 className="text-xl font-bold mb-2 text-text-primary">公式サイト・SNS</h3>
@@ -245,15 +220,15 @@ const DetailPage: React.FC = () => {
                     <div>
                         <Pill text={seasonText} className="capitalize mb-2" />
                         <h1 className="text-4xl font-extrabold text-text-primary">{anime.title}</h1>
-                        {prequel && (
+                        {anime.prequel && (
                           <Link 
-                              to={`/anime/${prequel.id}`}
+                              to={`/anime/${anime.prequel.id}`}
                               className="inline-flex items-center gap-1 text-sm text-secondary hover:underline mt-2"
                           >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
                               </svg>
-                              {`${prequel.title} (前のシーズン)`}
+                              {`${anime.prequel.title} (前のシーズン)`}
                           </Link>
                         )}
                     </div>
