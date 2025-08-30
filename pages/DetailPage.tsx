@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import type { AnimeDetail } from '../types';
 import { getAnimeDetails } from '../services/animeService';
+import { getSavedAnimeData } from '../services/dataService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Tabs from '../components/Tabs';
 import Pill from '../components/Pill';
@@ -105,6 +106,9 @@ const DetailPage: React.FC = () => {
   if (isLoading) return <LoadingSpinner />;
   if (!anime) return <div className="text-center py-10 text-text-secondary">アニメが見つかりませんでした。 <Link to="/" className="text-primary hover:underline">ホームに戻る</Link></div>;
 
+  const savedData = getSavedAnimeData();
+  const hasCustomData = savedData[anime.id];
+  
   const [year, seasonKey] = anime.season.split('-');
   const seasonText = `${year} ${seasonMap[seasonKey as keyof typeof seasonMap] || seasonKey}`;
 
@@ -113,6 +117,16 @@ const DetailPage: React.FC = () => {
       label: '作品情報',
       content: (
         <div className="space-y-6">
+          {hasCustomData && (
+            <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm text-green-800">管理者によって編集された情報</span>
+              </div>
+            </div>
+          )}
           <div>
             <h3 className="text-xl font-bold mb-2 text-text-primary">あらすじ</h3>
             <p className="text-text-secondary whitespace-pre-line">{anime.description}</p>
@@ -214,6 +228,16 @@ const DetailPage: React.FC = () => {
                   className="w-full h-auto object-cover rounded-lg shadow-xl cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => setIsModalOpen(true)}
                 />
+                {hasCustomData && (
+                  <div className="mt-2 text-center">
+                    <span className="inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      管理者編集済み
+                    </span>
+                  </div>
+                )}
             </div>
             <div className="md:col-span-2 space-y-4">
                 <div className="flex justify-between items-start">
@@ -238,6 +262,16 @@ const DetailPage: React.FC = () => {
                         </svg>
                     </button>
                 </div>
+                
+                {anime.genres.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {anime.genres.map(genre => (
+                      <span key={genre} className="inline-block bg-primary/10 text-primary text-sm font-medium px-3 py-1 rounded-full">
+                        {genre}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 
                 <Tabs tabs={tabs} />
             </div>

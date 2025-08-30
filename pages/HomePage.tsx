@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Anime } from '../types';
 import { getAnimeBySeason } from '../services/animeService';
+import { getSavedAnimeData } from '../services/dataService';
 import { STREAMING_SERVICES, CURRENT_YEAR } from '../constants';
 import AnimeCard from '../components/AnimeCard';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -76,11 +77,25 @@ const HomePage: React.FC = () => {
     );
   }, [animeList, activeFilters]);
   
+  const savedData = getSavedAnimeData();
+  const hasCustomData = Object.keys(savedData).length > 0;
+  
   const seasons = ['spring', 'summer', 'autumn', 'winter'];
   const years = Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i);
 
   return (
     <div className="space-y-6">
+      {hasCustomData && (
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-sm text-blue-800">管理者によってカスタマイズされた情報が表示されています</span>
+          </div>
+        </div>
+      )}
+      
       <div className="bg-surface border border-gray-200 p-4 rounded-lg shadow-sm flex flex-col md:flex-row gap-x-4 gap-y-2 items-center flex-wrap">
           <div className="flex-1 flex items-center gap-2 flex-wrap">
             <select
@@ -105,7 +120,7 @@ const HomePage: React.FC = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0011.667 0l3.181-3.183m-4.994 0h-4.992" />
                 </svg>
-                <span>強制更新</span>
+                <span>データ更新</span>
               </button>
           </div>
           <div className="flex-shrink-0">

@@ -1,6 +1,7 @@
 import type { Anime, AnimeDetail, CastMember, StaffMember, Prequel } from '../types';
 import { ANIME_STREAMING_MAP } from '../data/streamingData';
 import { ANIME_ENRICHMENT_DATA } from '../data/animeEnrichmentData';
+import { getSavedAnimeData } from './dataService';
 
 const ANNICT_API_URL = 'https://api.annict.com/graphql';
 // As per user request, using the provided Annict API token.
@@ -107,18 +108,22 @@ export const getAnimeBySeason = async (season: string): Promise<Anime[]> => {
   const animeList = works.map((work: any): Anime => {
     const jikanData = jikanDataMap.get(work.annictId);
     const staticData = ANIME_ENRICHMENT_DATA[work.annictId];
+    const savedData = getSavedAnimeData()[work.annictId];
 
     return {
       id: work.annictId,
-      title: work.title,
-      imageUrl: work.image?.recommendedImageUrl || work.image?.facebookOgImageUrl || 'https://picsum.photos/400/600',
+      title: savedData?.title || work.title,
+      imageUrl: savedData?.customImageUrl || work.image?.recommendedImageUrl || work.image?.facebookOgImageUrl || 'https://picsum.photos/400/600',
       season: `${work.seasonYear}-${work.seasonName?.toLowerCase()}`,
-      streamingServices: getStreamingServices(work.annictId),
+      streamingServices: savedData?.streamingServices || getStreamingServices(work.annictId),
       score: jikanData?.score || null,
-      genres: staticData?.genres || [],
-      description: staticData?.description || 'この作品のあらすじは、現在準備中です。',
+      genres: savedData?.genres || staticData?.genres || [],
+      description: savedData?.description || staticData?.description || 'この作品のあらすじは、現在準備中です。',
       prequel: staticData?.prequel || null,
     };
+  }).filter(anime => {
+    const savedData = getSavedAnimeData()[anime.id];
+    return savedData?.isVisible !== false; // デフォルトで表示、明示的にfalseの場合のみ非表示
   });
 
   try {
@@ -197,6 +202,8 @@ export const getAnimeDetails = async (id: number): Promise<AnimeDetail | null> =
   const seasonIdentifier = `${work.seasonYear}-${work.seasonName?.toLowerCase()}`;
   const cacheKey = `${CACHE_PREFIX}${seasonIdentifier}`;
   let cachedAnimeData: Anime | null = null;
+  const savedData = getSavedAnimeData()[id];
+  
   try {
     const cachedItem = localStorage.getItem(cacheKey);
     if (cachedItem) {
@@ -207,13 +214,13 @@ export const getAnimeDetails = async (id: number): Promise<AnimeDetail | null> =
 
   return {
     id: work.annictId,
-    title: work.title,
-    imageUrl: work.image?.recommendedImageUrl || work.image?.facebookOgImageUrl || 'https://picsum.photos/400/600',
+    title: savedData?.title || work.title,
+    imageUrl: savedData?.customImageUrl || work.image?.recommendedImageUrl || work.image?.facebookOgImageUrl || 'https://picsum.photos/400/600',
     season: `${work.seasonYear}-${work.seasonName?.toLowerCase()}`,
-    description: cachedAnimeData?.description || 'あらすじは一覧ページで取得されます。',
-    genres: cachedAnimeData?.genres || [],
+    description: savedData?.description || cachedAnimeData?.description || 'あらすじは一覧ページで取得されます。',
+    genres: savedData?.genres || cachedAnimeData?.genres || [],
     score: cachedAnimeData?.score || null,
-    streamingServices: cachedAnimeData?.streamingServices || [],
+    streamingServices: savedData?.streamingServices || cachedAnimeData?.streamingServices || [],
     prequel: cachedAnimeData?.prequel || null,
     officialSiteUrl: work.officialSiteUrl,
     twitterUrl: work.twitterUsername ? `https://twitter.com/${work.twitterUsername}` : null,
@@ -237,6 +244,51 @@ export const getAnimeDetails = async (id: number): Promise<AnimeDetail | null> =
       }))
       .filter((s): s is StaffMember => !!(s.id && s.name)),
   };
+};
+
+// 管理者用：全てのアニメを取得（非表示も含む）
+export const getAllAnimeForAdmin = async (season: string): Promise<Anime[]> => {
+  console.log(`Fetching all anime for admin (including hidden) for season: ${season}`);
+  const annictData = await fetchAnnict(listQuery, { season, first: ANIME_PER_PAGE });
+
+  const works = (annictData?.searchWorks?.nodes || []).filter((work: any) => work.media === 'TV');
+
+  const jikanFetchPromises = works.map(async (work: any) => {
+    try {
+      await sleep(350);
+      const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(work.title)}&limit=1`);
+      if (!jikanResponse.ok) return { annictId: work.annictId, score: null };
+      const jikanData = await jikanResponse.json();
+      const animeData = jikanData.data[0];
+      return { annictId: work.annictId, score: animeData?.score || null };
+    } catch (e) {
+      console.error(`Failed to fetch Jikan data for ${work.title}`, e);
+      return { annictId: work.annictId, score: null };
+    }
+  });
+
+  const jikanDataList = await Promise.all(jikanFetchPromises);
+  const jikanDataMap = new Map(jikanDataList.map(d => [d.annictId, d]));
+  
+  const animeList = works.map((work: any): Anime => {
+    const jikanData = jikanDataMap.get(work.annictId);
+    const staticData = ANIME_ENRICHMENT_DATA[work.annictId];
+    const savedData = getSavedAnimeData()[work.annictId];
+
+    return {
+      id: work.annictId,
+      title: savedData?.title || work.title,
+      imageUrl: savedData?.customImageUrl || work.image?.recommendedImageUrl || work.image?.facebookOgImageUrl || 'https://picsum.photos/400/600',
+      season: `${work.seasonYear}-${work.seasonName?.toLowerCase()}`,
+      streamingServices: savedData?.streamingServices || getStreamingServices(work.annictId),
+      score: jikanData?.score || null,
+      genres: savedData?.genres || staticData?.genres || [],
+      description: savedData?.description || staticData?.description || 'この作品のあらすじは、現在準備中です。',
+      prequel: staticData?.prequel || null,
+    };
+  });
+
+  return animeList;
 };
 
 // Deprecated functions - no longer called from DetailPage
