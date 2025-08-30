@@ -9,6 +9,7 @@ export interface SavedAnimeData {
   customImageUrl?: string;
   lastModified: number;
   isPublished: boolean; // 公開状態を管理
+  recommendationScore?: number; // 1-5のおすすめ度
 }
 
 export interface AdminCacheData {

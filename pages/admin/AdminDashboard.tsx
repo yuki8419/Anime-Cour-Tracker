@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { Anime } from '../../types';
 import { getAllAnimeForAdmin } from '../../services/animeService';
 import { getSavedAnimeData, deleteAnimeData, publishAnimeData, unpublishAnimeData, clearAdminCache } from '../../services/dataService';
+import { getGeminiRecommendation } from '../../services/geminiService';
 import { CURRENT_YEAR } from '../../constants';
 import AnimeCard from '../../components/AnimeCard';
 import AnimeEditModal from '../../components/AnimeEditModal';
@@ -30,6 +31,7 @@ const AdminDashboard: React.FC = () => {
   const [selectedSeason, setSelectedSeason] = useState<string>(getCurrentSeason());
   const [editingAnime, setEditingAnime] = useState<Anime | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   const fetchAnimeForAdmin = useCallback(async () => {
     setIsLoading(true);
@@ -90,6 +92,118 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleBulkSave = async () => {
+    if (confirm('全ての下書きアニメを一括保存しますか？')) {
+      setIsProcessing(true);
+      try {
+        const savedData = getSavedAnimeData();
+        for (const anime of draftAnime) {
+          const existingData = savedData[anime.id];
+          const dataToSave: SavedAnimeData = {
+            id: anime.id,
+            title: existingData?.title || anime.title,
+            description: existingData?.description || anime.description,
+            genres: existingData?.genres || anime.genres,
+            streamingServices: existingData?.streamingServices || anime.streamingServices,
+            isVisible: existingData?.isVisible ?? true,
+            customImageUrl: existingData?.customImageUrl || '',
+            isPublished: false,
+            lastModified: Date.now()
+          };
+          saveAnimeData(dataToSave);
+        }
+        fetchAnimeForAdmin();
+      } catch (error) {
+        alert('一括保存に失敗しました');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const handleBulkPublish = async () => {
+    if (confirm('全ての下書きアニメを一括公開しますか？')) {
+      setIsProcessing(true);
+      try {
+        const savedData = getSavedAnimeData();
+        for (const anime of draftAnime) {
+          const existingData = savedData[anime.id];
+          const dataToSave: SavedAnimeData = {
+            id: anime.id,
+            title: existingData?.title || anime.title,
+            description: existingData?.description || anime.description,
+            genres: existingData?.genres || anime.genres,
+            streamingServices: existingData?.streamingServices || anime.streamingServices,
+            isVisible: existingData?.isVisible ?? true,
+            customImageUrl: existingData?.customImageUrl || '',
+            isPublished: true,
+            lastModified: Date.now()
+          };
+          saveAnimeData(dataToSave);
+          publishAnimeData(anime.id);
+        }
+        fetchAnimeForAdmin();
+      } catch (error) {
+        alert('一括公開に失敗しました');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const handleEnrichWithWiki = async () => {
+    if (confirm('Wikipediaからあらすじ情報を取得しますか？（時間がかかる場合があります）')) {
+      setIsProcessing(true);
+      try {
+        const savedData = getSavedAnimeData();
+        let updatedCount = 0;
+        
+        for (const anime of animeList) {
+          if (anime.description === 'この作品のあらすじは、現在準備中です。' || 
+              anime.description === 'あらすじはありません。') {
+            try {
+              // Wikipedia検索APIを使用してあらすじを取得
+              const searchResponse = await fetch(
+                `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(anime.title)}`
+              );
+              
+              if (searchResponse.ok) {
+                const wikiData = await searchResponse.json();
+                if (wikiData.extract && wikiData.extract.length > 50) {
+                  const existingData = savedData[anime.id];
+                  const dataToSave: SavedAnimeData = {
+                    id: anime.id,
+                    title: existingData?.title || anime.title,
+                    description: wikiData.extract,
+                    genres: existingData?.genres || anime.genres,
+                    streamingServices: existingData?.streamingServices || anime.streamingServices,
+                    isVisible: existingData?.isVisible ?? true,
+                    customImageUrl: existingData?.customImageUrl || '',
+                    isPublished: existingData?.isPublished ?? false,
+                    lastModified: Date.now()
+                  };
+                  saveAnimeData(dataToSave);
+                  updatedCount++;
+                }
+              }
+              // レート制限を避けるため少し待機
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (error) {
+              console.error(`Failed to fetch wiki data for ${anime.title}:`, error);
+            }
+          }
+        }
+        
+        alert(`${updatedCount}件のあらすじを更新しました`);
+        fetchAnimeForAdmin();
+      } catch (error) {
+        alert('Wikipedia情報の取得に失敗しました');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
   const savedData = getSavedAnimeData();
   const publishedAnime = animeList.filter(anime => {
     const saved = savedData[anime.id];
@@ -129,13 +243,50 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode(viewMode === 'grid' ? 'table' : 'grid')}
-              className="bg-gray-100 hover:bg-gray-200 text-text-secondary font-medium px-3 py-2 rounded-md transition-colors duration-200"
+              className="bg-gray-100 hover:bg-gray-200 text-text-secondary font-medium px-3 py-2 rounded-md transition-colors disabled:opacity-50"
+              disabled={isProcessing}
             >
               {viewMode === 'grid' ? 'テーブル表示' : 'グリッド表示'}
             </button>
             <button
+              onClick={handleEnrichWithWiki}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-medium px-4 py-2 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              disabled={isProcessing}
+              title="Wikipediaからあらすじ情報を自動取得します"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <span>Wiki情報取得</span>
+            </button>
+            {draftAnime.length > 0 && (
+              <>
+                <button
+                  onClick={handleBulkSave}
+                  className="bg-gray-500 hover:bg-gray-600 text-white font-medium px-4 py-2 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  disabled={isProcessing}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <span>一括保存 ({draftAnime.length}件)</span>
+                </button>
+                <button
+                  onClick={handleBulkPublish}
+                  className="bg-green-500 hover:bg-green-600 text-white font-medium px-4 py-2 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  disabled={isProcessing}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>一括公開 ({draftAnime.length}件)</span>
+                </button>
+              </>
+            )}
+            <button
                 onClick={handleForceRefresh}
-                className="bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-md transition-colors duration-200 flex items-center gap-1.5"
+                className="bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-md transition-colors duration-200 flex items-center gap-1.5 disabled:opacity-50"
+                disabled={isProcessing}
                 title="このシーズンのキャッシュを削除して、全ての情報を再取得します"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -148,6 +299,7 @@ const AdminDashboard: React.FC = () => {
         
         <div className="text-sm text-text-secondary">
           公開中: {publishedAnime.length}件 | 下書き: {draftAnime.length}件 | 非表示: {hiddenAnime.length}件 | 合計: {animeList.length}件
+          {isProcessing && <span className="ml-4 text-blue-600">処理中...</span>}
         </div>
       </div>
 

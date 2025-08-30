@@ -22,6 +22,7 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
     customImageUrl: '',
     isPublished: false,
     lastModified: Date.now()
+    recommendationScore: 0,
   });
 
   useEffect(() => {
@@ -39,6 +40,7 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
         customImageUrl: existingData?.customImageUrl || '',
         isPublished: existingData?.isPublished ?? false,
         lastModified: Date.now()
+        recommendationScore: existingData?.recommendationScore || 0,
       });
     }
   }, [anime, isOpen]);
@@ -191,6 +193,33 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
               </label>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">おすすめ度 (1-5)</label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map(rating => (
+                  <button
+                    key={rating}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, recommendationScore: rating }))}
+                    className={`w-10 h-10 rounded-full border-2 transition-colors ${
+                      formData.recommendationScore === rating
+                        ? 'bg-blue-500 border-blue-500 text-white'
+                        : 'border-gray-300 text-gray-600 hover:border-blue-300'
+                    }`}
+                  >
+                    {rating}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, recommendationScore: 0 }))}
+                  className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  リセット
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">ユーザーへのおすすめ度を設定します</p>
+            </div>
             <div className="bg-gray-50 p-4 rounded-lg">
               <h4 className="text-sm font-medium text-text-primary mb-2">公開状態</h4>
               <div className="flex items-center gap-4">

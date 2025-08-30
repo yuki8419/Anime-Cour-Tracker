@@ -27,6 +27,22 @@ const StarRating: React.FC<{ score: number | null }> = ({ score }) => {
   );
 };
 
+const RecommendationRating: React.FC<{ score: number | null }> = ({ score }) => {
+  if (score === null || score === 0) {
+    return null;
+  }
+  
+  const fullStars = Math.floor(score);
+  const emptyStars = 5 - fullStars;
+
+  return (
+    <div className="flex items-center" aria-label={`おすすめ度: ${score}点`}>
+      {[...Array(fullStars)].map((_, i) => <span key={`rec-full-${i}`} className="text-blue-500">☆</span>)}
+      {[...Array(emptyStars)].map((_, i) => <span key={`rec-empty-${i}`} className="text-gray-300">☆</span>)}
+      <span className="text-xs text-text-secondary ml-1">おすすめ度</span>
+    </div>
+  );
+};
 
 const AnimeCard: React.FC<AnimeCardProps> = ({ anime }) => {
   return (
@@ -48,6 +64,7 @@ const AnimeCard: React.FC<AnimeCardProps> = ({ anime }) => {
         
         <div className="mt-auto space-y-2">
           <StarRating score={anime.score ? anime.score / 2 : null} />
+          <RecommendationRating score={anime.recommendationScore || null} />
           <div className="flex flex-wrap gap-1.5">
             {anime.genres.slice(0, 2).map(genre => (
               <Pill key={genre} text={genre} />

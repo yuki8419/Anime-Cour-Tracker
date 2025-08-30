@@ -9,6 +9,7 @@ export interface Anime {
   score: number | null;
   description: string;
   prequel: Prequel | null;
+  recommendationScore?: number; // 1-5のおすすめ度
 }
 
 export interface Episode {

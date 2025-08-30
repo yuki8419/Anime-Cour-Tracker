@@ -141,6 +141,7 @@ export const getAnimeBySeason = async (season: string): Promise<Anime[]> => {
       genres: (saved?.isPublished ? saved.genres : null) || staticData?.genres || [],
       description: (saved?.isPublished ? saved.description : null) || staticData?.description || 'この作品のあらすじは、現在準備中です。',
       prequel: staticData?.prequel || null,
+      recommendationScore: saved?.recommendationScore || 0,
     };
   }).filter(anime => {
     const saved = savedData[anime.id];
@@ -244,6 +245,7 @@ export const getAnimeDetails = async (id: number): Promise<AnimeDetail | null> =
     score: cachedAnimeData?.score || null,
     streamingServices: (saved?.isPublished ? saved.streamingServices : null) || cachedAnimeData?.streamingServices || [],
     prequel: cachedAnimeData?.prequel || null,
+    recommendationScore: saved?.recommendationScore || 0,
     officialSiteUrl: work.officialSiteUrl,
     twitterUrl: work.twitterUsername ? `https://twitter.com/${work.twitterUsername}` : null,
     episodes: (work.episodes?.nodes || []).map((ep: any) => ({
@@ -327,6 +329,7 @@ export const getAllAnimeForAdmin = async (season: string): Promise<Anime[]> => {
       genres: saved?.genres || staticData?.genres || [],
       description: saved?.description || staticData?.description || 'この作品のあらすじは、現在準備中です。',
       prequel: staticData?.prequel || null,
+      recommendationScore: saved?.recommendationScore || 0,
     };
   });
 
