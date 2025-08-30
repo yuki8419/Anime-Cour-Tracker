@@ -21,7 +21,7 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
     isVisible: true,
     customImageUrl: '',
     isPublished: false,
-    lastModified: Date.now()
+    lastModified: Date.now(),
     recommendationScore: 0,
   });
 
@@ -39,7 +39,7 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
         isVisible: existingData?.isVisible ?? true,
         customImageUrl: existingData?.customImageUrl || '',
         isPublished: existingData?.isPublished ?? false,
-        lastModified: Date.now()
+        lastModified: Date.now(),
         recommendationScore: existingData?.recommendationScore || 0,
       });
     }
