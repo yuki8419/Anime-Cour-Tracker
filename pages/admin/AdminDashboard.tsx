@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import type { Anime } from '../../types';
 import { getAllAnimeForAdmin } from '../../services/animeService';
-import { getSavedAnimeData, deleteAnimeData } from '../../services/dataService';
+import { getSavedAnimeData, deleteAnimeData, publishAnimeData, unpublishAnimeData, clearAdminCache } from '../../services/dataService';
 import { CURRENT_YEAR } from '../../constants';
 import AnimeCard from '../../components/AnimeCard';
 import AnimeEditModal from '../../components/AnimeEditModal';
@@ -51,8 +51,9 @@ const AdminDashboard: React.FC = () => {
 
   const handleForceRefresh = useCallback(() => {
     const seasonIdentifier = `${selectedYear}-${selectedSeason}`;
-    const cacheKey = `anime_data_${seasonIdentifier}`;
-    localStorage.removeItem(cacheKey);
+    // 通常のキャッシュと管理者用キャッシュの両方をクリア
+    localStorage.removeItem(`anime_data_${seasonIdentifier}`);
+    clearAdminCache(seasonIdentifier);
     fetchAnimeForAdmin();
   }, [selectedYear, selectedSeason, fetchAnimeForAdmin]);
 
@@ -71,8 +72,33 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handlePublish = (animeId: number) => {
+    try {
+      publishAnimeData(animeId);
+      fetchAnimeForAdmin();
+    } catch (error) {
+      alert('公開に失敗しました');
+    }
+  };
+
+  const handleUnpublish = (animeId: number) => {
+    try {
+      unpublishAnimeData(animeId);
+      fetchAnimeForAdmin();
+    } catch (error) {
+      alert('非公開に失敗しました');
+    }
+  };
+
   const savedData = getSavedAnimeData();
-  const visibleAnime = animeList.filter(anime => savedData[anime.id]?.isVisible !== false);
+  const publishedAnime = animeList.filter(anime => {
+    const saved = savedData[anime.id];
+    return saved?.isVisible !== false && saved?.isPublished === true;
+  });
+  const draftAnime = animeList.filter(anime => {
+    const saved = savedData[anime.id];
+    return saved?.isVisible !== false && saved?.isPublished !== true;
+  });
   const hiddenAnime = animeList.filter(anime => savedData[anime.id]?.isVisible === false);
 
   const seasons = ['spring', 'summer', 'autumn', 'winter'];
@@ -121,7 +147,7 @@ const AdminDashboard: React.FC = () => {
         </div>
         
         <div className="text-sm text-text-secondary">
-          表示中: {visibleAnime.length}件 | 非表示: {hiddenAnime.length}件 | 合計: {animeList.length}件
+          公開中: {publishedAnime.length}件 | 下書き: {draftAnime.length}件 | 非表示: {hiddenAnime.length}件 | 合計: {animeList.length}件
         </div>
       </div>
 
@@ -129,15 +155,16 @@ const AdminDashboard: React.FC = () => {
         <LoadingSpinner />
       ) : (
         <div className="space-y-6">
-          {/* 表示中のアニメ */}
+          {/* 公開中のアニメ */}
           <div>
-            <h2 className="text-xl font-bold text-text-primary mb-4">表示中のアニメ ({visibleAnime.length}件)</h2>
+            <h2 className="text-xl font-bold text-text-primary mb-4">公開中のアニメ ({publishedAnime.length}件)</h2>
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {visibleAnime.map(anime => (
+                {publishedAnime.map(anime => (
                   <div key={anime.id} className="relative group">
                     <AnimeCard anime={anime} />
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
+                    <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded">公開中</div>
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                       <button
                         onClick={() => setEditingAnime(anime)}
                         className="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-full shadow-lg transition-colors"
@@ -145,6 +172,15 @@ const AdminDashboard: React.FC = () => {
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleUnpublish(anime.id)}
+                        className="bg-orange-500 hover:bg-orange-600 text-white p-1.5 rounded-full shadow-lg transition-colors"
+                        title="非公開"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
                         </svg>
                       </button>
                     </div>
@@ -163,12 +199,15 @@ const AdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {visibleAnime.map(anime => (
-                      <tr key={anime.id}>
+                    {publishedAnime.map(anime => (
+                      <tr key={anime.id} className="bg-green-50">
                         <td className="px-6 py-4">
                           <div className="flex items-center">
                             <img className="h-12 w-8 object-cover rounded mr-3" src={anime.imageUrl} alt={anime.title} />
-                            <div className="text-sm font-medium text-text-primary">{anime.title}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium text-text-primary">{anime.title}</div>
+                              <span className="bg-green-500 text-white text-xs px-2 py-1 rounded">公開中</span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-text-secondary">{anime.genres.join(', ') || 'N/A'}</td>
@@ -180,6 +219,12 @@ const AdminDashboard: React.FC = () => {
                           >
                             編集
                           </button>
+                          <button
+                            onClick={() => handleUnpublish(anime.id)}
+                            className="text-orange-600 hover:text-orange-800 transition-colors"
+                          >
+                            非公開
+                          </button>
                           <Link to={`/anime/${anime.id}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">プレビュー</Link>
                         </td>
                       </tr>
@@ -189,6 +234,88 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* 下書きのアニメ */}
+          {draftAnime.length > 0 && (
+            <div>
+              <h2 className="text-xl font-bold text-text-primary mb-4">下書きのアニメ ({draftAnime.length}件)</h2>
+              {viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                  {draftAnime.map(anime => (
+                    <div key={anime.id} className="relative group">
+                      <AnimeCard anime={anime} />
+                      <div className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">下書き</div>
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
+                        <button
+                          onClick={() => setEditingAnime(anime)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-full shadow-lg transition-colors"
+                          title="編集"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handlePublish(anime.id)}
+                          className="bg-green-500 hover:bg-green-600 text-white p-1.5 rounded-full shadow-lg transition-colors"
+                          title="公開"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-surface shadow-md rounded-lg overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">タイトル</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">ジャンル</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">配信サービス</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {draftAnime.map(anime => (
+                        <tr key={anime.id} className="bg-yellow-50">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <img className="h-12 w-8 object-cover rounded mr-3" src={anime.imageUrl} alt={anime.title} />
+                              <div className="flex items-center gap-2">
+                                <div className="text-sm font-medium text-text-primary">{anime.title}</div>
+                                <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded">下書き</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-text-secondary">{anime.genres.join(', ') || 'N/A'}</td>
+                          <td className="px-6 py-4 text-sm text-text-secondary">{anime.streamingServices.join(', ') || 'N/A'}</td>
+                          <td className="px-6 py-4 text-sm font-medium space-x-2">
+                            <button
+                              onClick={() => setEditingAnime(anime)}
+                              className="text-blue-600 hover:text-blue-800 transition-colors"
+                            >
+                              編集
+                            </button>
+                            <button
+                              onClick={() => handlePublish(anime.id)}
+                              className="text-green-600 hover:text-green-800 transition-colors"
+                            >
+                              公開
+                            </button>
+                            <Link to={`/anime/${anime.id}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">プレビュー</Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 非表示のアニメ */}
           {hiddenAnime.length > 0 && (

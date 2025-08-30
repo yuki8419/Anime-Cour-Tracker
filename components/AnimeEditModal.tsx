@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Anime } from '../types';
 import type { SavedAnimeData } from '../services/dataService';
-import { saveAnimeData, getSavedAnimeData } from '../services/dataService';
+import { saveAnimeData, getSavedAnimeData, publishAnimeData, unpublishAnimeData } from '../services/dataService';
 import { STREAMING_SERVICES, ANIME_GENRES } from '../constants';
 
 interface AnimeEditModalProps {
@@ -20,6 +20,7 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
     streamingServices: anime.streamingServices,
     isVisible: true,
     customImageUrl: '',
+    isPublished: false,
     lastModified: Date.now()
   });
 
@@ -36,6 +37,7 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
         streamingServices: existingData?.streamingServices || anime.streamingServices,
         isVisible: existingData?.isVisible ?? true,
         customImageUrl: existingData?.customImageUrl || '',
+        isPublished: existingData?.isPublished ?? false,
         lastModified: Date.now()
       });
     }
@@ -45,9 +47,28 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
     try {
       saveAnimeData(formData);
       onSave();
-      onClose();
     } catch (error) {
       alert('保存に失敗しました');
+    }
+  };
+
+  const handlePublish = () => {
+    try {
+      saveAnimeData({ ...formData, isPublished: true });
+      publishAnimeData(formData.id);
+      onSave();
+      onClose();
+    } catch (error) {
+      alert('公開に失敗しました');
+    }
+  };
+
+  const handleUnpublish = () => {
+    try {
+      unpublishAnimeData(formData.id);
+      onSave();
+    } catch (error) {
+      alert('非公開に失敗しました');
     }
   };
 
@@ -169,9 +190,59 @@ const AnimeEditModal: React.FC<AnimeEditModalProps> = ({ anime, isOpen, onClose,
                 ユーザーに表示する
               </label>
             </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h4 className="text-sm font-medium text-text-primary mb-2">公開状態</h4>
+              <div className="flex items-center gap-4">
+                <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+                  formData.isPublished ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {formData.isPublished ? '公開中' : '下書き'}
+                </span>
+                {formData.isPublished && (
+                  <button
+                    onClick={handleUnpublish}
+                    className="text-xs text-red-600 hover:text-red-800 transition-colors"
+                  >
+                    非公開にする
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex justify-between pt-4 border-t">
+            <div className="text-xs text-gray-500">
+              最終更新: {new Date(formData.lastModified).toLocaleString('ja-JP')}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-text-secondary bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+              >
+                下書き保存
+              </button>
+              <button
+                onClick={handlePublish}
+                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+              >
+                保存して公開
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AnimeEditModal;
             <button
               onClick={onClose}
               className="px-4 py-2 text-text-secondary bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
