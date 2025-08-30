@@ -171,8 +171,11 @@ const AdminDashboard: React.FC = () => {
             if (jikanResponse.ok) {
               const jikanData = await jikanResponse.json();
               const animeData = jikanData.data[0];
-              if (animeData?.score) {
-                jikanDataMap.set(anime.id, animeData.score);
+              if (animeData) {
+                jikanDataMap.set(anime.id, {
+                  score: animeData.score || null,
+                  genres: animeData.genres ? animeData.genres.map((g: any) => g.name) : []
+                });
               }
             }
           } catch (error) {
@@ -197,14 +200,14 @@ const AdminDashboard: React.FC = () => {
                 
                 // 既存データと統合
                 const existingData = savedData[anime.id];
-                const jikanScore = jikanDataMap.get(anime.id);
-                const recommendationScore = jikanScore ? calculateRecommendationScore(jikanScore) : (existingData?.recommendationScore || 0);
+                const jikanData = jikanDataMap.get(anime.id);
+                const recommendationScore = jikanData?.score ? calculateRecommendationScore(jikanData.score) : (existingData?.recommendationScore || 0);
                 
                 const dataToSave: SavedAnimeData = {
                   id: anime.id,
                   title: existingData?.title || anime.title,
                   description: wikiDescription,
-                  genres: existingData?.genres || anime.genres,
+                  genres: existingData?.genres || jikanData?.genres || anime.genres,
                   streamingServices: existingData?.streamingServices || anime.streamingServices,
                   isVisible: existingData?.isVisible ?? true,
                   customImageUrl: existingData?.customImageUrl || '',
@@ -221,14 +224,14 @@ const AdminDashboard: React.FC = () => {
           } else {
             // あらすじがある場合でも、Jikanの評価スコアは更新
             const existingData = savedData[anime.id];
-            const jikanScore = jikanDataMap.get(anime.id);
-            if (jikanScore && !existingData?.recommendationScore) {
-              const recommendationScore = calculateRecommendationScore(jikanScore);
+            const jikanData = jikanDataMap.get(anime.id);
+            if (jikanData && (!existingData?.recommendationScore || !existingData?.genres?.length)) {
+              const recommendationScore = jikanData.score ? calculateRecommendationScore(jikanData.score) : (existingData?.recommendationScore || 0);
               const dataToSave: SavedAnimeData = {
                 id: anime.id,
                 title: existingData?.title || anime.title,
                 description: existingData?.description || anime.description,
-                genres: existingData?.genres || anime.genres,
+                genres: existingData?.genres || jikanData.genres || anime.genres,
                 streamingServices: existingData?.streamingServices || anime.streamingServices,
                 isVisible: existingData?.isVisible ?? true,
                 customImageUrl: existingData?.customImageUrl || '',
@@ -242,7 +245,7 @@ const AdminDashboard: React.FC = () => {
           }
         }
         
-        alert(`一括データ取得完了！\n処理件数: ${processedCount}件\n- Jikan評価データ: ${jikanDataMap.size}件取得\n- Wikipedia情報: 更新済み`);
+        alert(`一括データ取得完了！\n処理件数: ${processedCount}件\n- Jikan評価・ジャンルデータ: ${jikanDataMap.size}件取得\n- Wikipedia情報: 更新済み`);
         fetchAnimeForAdmin();
       } catch (error) {
         console.error('一括データ取得エラー:', error);
