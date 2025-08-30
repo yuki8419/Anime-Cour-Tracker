@@ -13,15 +13,6 @@ const ANIME_PER_PAGE = 30;
 const CACHE_PREFIX = 'anime_data_';
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// JikanAPIの評価スコア（1-10）を5段階おすすめ度に変換
-const calculateRecommendationScore = (jikanScore: number): number => {
-  if (jikanScore >= 9.0) return 5; // 傑作
-  if (jikanScore >= 8.0) return 4; // 優秀
-  if (jikanScore >= 7.0) return 3; // 良作
-  if (jikanScore >= 6.0) return 2; // 普通
-  return 1; // 微妙
-};
-
 // 評価スコアを5段階のおすすめ度に変換
 export const calculateRecommendationScore = (score: number): number => {
   if (score >= 9.0) return 5; // ☆☆☆☆☆ 傑作
