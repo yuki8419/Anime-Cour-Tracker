@@ -151,6 +151,107 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleBulkDataFetch = async () => {
+    if (confirm('全アニメのデータを一括取得しますか？（Annict→Jikan→Wikipedia の順で処理します。時間がかかる場合があります）')) {
+      setIsProcessing(true);
+      try {
+        const savedData = getSavedAnimeData();
+        let processedCount = 0;
+        
+        // ステップ1: Annictから基本データは既に取得済み（animeListに含まれる）
+        console.log('ステップ1: Annictデータ取得済み');
+        
+        // ステップ2: JikanAPIで評価を全取得
+        console.log('ステップ2: Jikan評価データ取得開始');
+        const jikanDataMap = new Map();
+        for (const anime of animeList) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 350)); // レート制限対応
+            const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(anime.title)}&limit=1`);
+            if (jikanResponse.ok) {
+              const jikanData = await jikanResponse.json();
+              const animeData = jikanData.data[0];
+              if (animeData?.score) {
+                jikanDataMap.set(anime.id, animeData.score);
+              }
+            }
+          } catch (error) {
+            console.error(`Jikan取得失敗: ${anime.title}`, error);
+          }
+        }
+        
+        // ステップ3: Wikipediaからあらすじを全取得
+        console.log('ステップ3: Wikipedia情報取得開始');
+        for (const anime of animeList) {
+          if (anime.description === 'この作品のあらすじは、現在準備中です。' || 
+              anime.description === 'あらすじはありません。') {
+            try {
+              await new Promise(resolve => setTimeout(resolve, 500)); // レート制限対応
+              const searchResponse = await fetch(
+                `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(anime.title)}`
+              );
+              
+              if (searchResponse.ok) {
+                const wikiData = await searchResponse.json();
+                const wikiDescription = wikiData.extract && wikiData.extract.length > 50 ? wikiData.extract : anime.description;
+                
+                // 既存データと統合
+                const existingData = savedData[anime.id];
+                const jikanScore = jikanDataMap.get(anime.id);
+                const recommendationScore = jikanScore ? calculateRecommendationScore(jikanScore) : (existingData?.recommendationScore || 0);
+                
+                const dataToSave: SavedAnimeData = {
+                  id: anime.id,
+                  title: existingData?.title || anime.title,
+                  description: wikiDescription,
+                  genres: existingData?.genres || anime.genres,
+                  streamingServices: existingData?.streamingServices || anime.streamingServices,
+                  isVisible: existingData?.isVisible ?? true,
+                  customImageUrl: existingData?.customImageUrl || '',
+                  isPublished: existingData?.isPublished ?? false,
+                  lastModified: Date.now(),
+                  recommendationScore: recommendationScore,
+                };
+                saveAnimeData(dataToSave);
+                processedCount++;
+              }
+            } catch (error) {
+              console.error(`Wikipedia取得失敗: ${anime.title}`, error);
+            }
+          } else {
+            // あらすじがある場合でも、Jikanの評価スコアは更新
+            const existingData = savedData[anime.id];
+            const jikanScore = jikanDataMap.get(anime.id);
+            if (jikanScore && !existingData?.recommendationScore) {
+              const recommendationScore = calculateRecommendationScore(jikanScore);
+              const dataToSave: SavedAnimeData = {
+                id: anime.id,
+                title: existingData?.title || anime.title,
+                description: existingData?.description || anime.description,
+                genres: existingData?.genres || anime.genres,
+                streamingServices: existingData?.streamingServices || anime.streamingServices,
+                isVisible: existingData?.isVisible ?? true,
+                customImageUrl: existingData?.customImageUrl || '',
+                isPublished: existingData?.isPublished ?? false,
+                lastModified: Date.now(),
+                recommendationScore: recommendationScore,
+              };
+              saveAnimeData(dataToSave);
+              processedCount++;
+            }
+          }
+        }
+        
+        alert(`一括データ取得完了！\n処理件数: ${processedCount}件\n- Jikan評価データ: ${jikanDataMap.size}件取得\n- Wikipedia情報: 更新済み`);
+        fetchAnimeForAdmin();
+      } catch (error) {
+        console.error('一括データ取得エラー:', error);
+        alert('一括データ取得に失敗しました');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
   const handleEnrichWithWiki = async () => {
     if (confirm('Wikipediaからあらすじ情報を取得しますか？（時間がかかる場合があります）')) {
       setIsProcessing(true);
@@ -258,6 +359,17 @@ const AdminDashboard: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
               <span>Wiki情報取得</span>
+            </button>
+            <button
+              onClick={handleBulkDataFetch}
+              className="bg-purple-500 hover:bg-purple-600 text-white font-medium px-4 py-2 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              disabled={isProcessing}
+              title="Annict→Jikan→Wikipediaの順で全データを一括取得します"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>一括データ取得</span>
             </button>
             {draftAnime.length > 0 && (
               <>
