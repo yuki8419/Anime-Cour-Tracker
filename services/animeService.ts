@@ -130,16 +130,6 @@ export const getAnimeBySeason = async (season: string): Promise<Anime[]> => {
     const jikanData = jikanDataMap.get(work.annictId);
     const staticData = ANIME_ENRICHMENT_DATA[work.annictId];
     const saved = savedData[work.annictId];
-    
-    // JikanAPIのスコア（1-10）を5段階のおすすめ度に変換
-    const calculateRecommendationScore = (jikanScore: number | null): number => {
-      if (!jikanScore || jikanScore === 0) return 0;
-      if (jikanScore >= 9.0) return 5; // 9.0以上 = 5つ星（傑作）
-      if (jikanScore >= 8.0) return 4; // 8.0-8.9 = 4つ星（優秀）
-      if (jikanScore >= 7.0) return 3; // 7.0-7.9 = 3つ星（良作）
-      if (jikanScore >= 6.0) return 2; // 6.0-6.9 = 2つ星（普通）
-      return 1; // 6.0未満 = 1つ星（微妙）
-    };
 
     return {
       id: work.annictId,
