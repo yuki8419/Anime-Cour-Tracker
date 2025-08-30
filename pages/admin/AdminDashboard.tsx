@@ -155,7 +155,6 @@ const AdminDashboard: React.FC = () => {
     if (confirm('全アニメのデータを一括取得しますか？（Annict→Jikan→Wikipedia の順で処理します。時間がかかる場合があります）')) {
       setIsProcessing(true);
       try {
-        const savedData = getSavedAnimeData();
         let processedCount = 0;
         
         // ステップ1: Annictから基本データは既に取得済み（animeListに含まれる）
@@ -163,6 +162,7 @@ const AdminDashboard: React.FC = () => {
         
         // ステップ2: JikanAPIで評価を全取得
         console.log('ステップ2: Jikan評価データ取得開始');
+        const savedData = getSavedAnimeData();
         const jikanDataMap = new Map();
         for (const anime of animeList) {
           try {
@@ -174,7 +174,7 @@ const AdminDashboard: React.FC = () => {
               if (animeData) {
                 jikanDataMap.set(anime.id, {
                   score: animeData.score || null,
-                  genres: animeData.genres ? animeData.genres.map((g: any) => g.name) : []
+                  genres: animeData.genres ? animeData.genres.map((g: any) => g.name) : anime.genres
                 });
               }
             }
@@ -203,7 +203,7 @@ const AdminDashboard: React.FC = () => {
                 const jikanData = jikanDataMap.get(anime.id);
                 const recommendationScore = jikanData?.score ? calculateRecommendationScore(jikanData.score) : (existingData?.recommendationScore || 0);
                 
-                const dataToSave: SavedAnimeData = {
+                const dataToSave = {
                   id: anime.id,
                   title: existingData?.title || anime.title,
                   description: wikiDescription,
@@ -227,7 +227,7 @@ const AdminDashboard: React.FC = () => {
             const jikanData = jikanDataMap.get(anime.id);
             if (jikanData && (!existingData?.recommendationScore || !existingData?.genres?.length)) {
               const recommendationScore = jikanData.score ? calculateRecommendationScore(jikanData.score) : (existingData?.recommendationScore || 0);
-              const dataToSave: SavedAnimeData = {
+              const dataToSave = {
                 id: anime.id,
                 title: existingData?.title || anime.title,
                 description: existingData?.description || anime.description,
@@ -302,6 +302,122 @@ const AdminDashboard: React.FC = () => {
         fetchAnimeForAdmin();
       } catch (error) {
         alert('Wikipedia情報の取得に失敗しました');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const handleBulkDataFetchAllSeasons = async () => {
+    if (confirm('2022-2025年の全シーズンのアニメデータを一括取得しますか？（非常に時間がかかります）')) {
+      setIsProcessing(true);
+      try {
+        const years = [2022, 2023, 2024, 2025];
+        const seasons = ['spring', 'summer', 'autumn', 'winter'];
+        let totalProcessed = 0;
+        let totalJikanData = 0;
+        
+        for (const year of years) {
+          for (const season of seasons) {
+            try {
+              console.log(`処理中: ${year}年${seasonNames[season]}`);
+              const seasonIdentifier = `${year}-${season}`;
+              const seasonAnimeList = await getAllAnimeForAdmin(seasonIdentifier);
+              
+              // JikanAPIで評価とジャンルを取得
+              const jikanDataMap = new Map();
+              for (const anime of seasonAnimeList) {
+                try {
+                  await new Promise(resolve => setTimeout(resolve, 350)); // レート制限対応
+                  const jikanResponse = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(anime.title)}&limit=1`);
+                  if (jikanResponse.ok) {
+                    const jikanData = await jikanResponse.json();
+                    const animeData = jikanData.data[0];
+                    if (animeData) {
+                      jikanDataMap.set(anime.id, {
+                        score: animeData.score || null,
+                        genres: animeData.genres ? animeData.genres.map((g: any) => g.name) : []
+                      });
+                      totalJikanData++;
+                    }
+                  }
+                } catch (error) {
+                  console.error(`Jikan取得失敗: ${anime.title}`, error);
+                }
+              }
+              
+              // Wikipediaからあらすじを取得
+              const savedData = getSavedAnimeData();
+              for (const anime of seasonAnimeList) {
+                if (anime.description === 'この作品のあらすじは、現在準備中です。' || 
+                    anime.description === 'あらすじはありません。') {
+                  try {
+                    await new Promise(resolve => setTimeout(resolve, 500)); // レート制限対応
+                    const searchResponse = await fetch(
+                      `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(anime.title)}`
+                    );
+                    
+                    if (searchResponse.ok) {
+                      const wikiData = await searchResponse.json();
+                      const wikiDescription = wikiData.extract && wikiData.extract.length > 50 ? wikiData.extract : anime.description;
+                      
+                      // 既存データと統合
+                      const existingData = savedData[anime.id];
+                      const jikanData = jikanDataMap.get(anime.id);
+                      const recommendationScore = jikanData?.score ? calculateRecommendationScore(jikanData.score) : (existingData?.recommendationScore || 0);
+                      
+                      const dataToSave = {
+                        id: anime.id,
+                        title: existingData?.title || anime.title,
+                        description: wikiDescription,
+                        genres: existingData?.genres || jikanData?.genres || anime.genres,
+                        streamingServices: existingData?.streamingServices || anime.streamingServices,
+                        isVisible: existingData?.isVisible ?? true,
+                        customImageUrl: existingData?.customImageUrl || '',
+                        isPublished: existingData?.isPublished ?? false,
+                        lastModified: Date.now(),
+                        recommendationScore: recommendationScore,
+                      };
+                      saveAnimeData(dataToSave);
+                      totalProcessed++;
+                    }
+                  } catch (error) {
+                    console.error(`Wikipedia取得失敗: ${anime.title}`, error);
+                  }
+                } else {
+                  // あらすじがある場合でも、Jikanの評価スコアは更新
+                  const existingData = savedData[anime.id];
+                  const jikanData = jikanDataMap.get(anime.id);
+                  if (jikanData && (!existingData?.recommendationScore || !existingData?.genres?.length)) {
+                    const recommendationScore = jikanData.score ? calculateRecommendationScore(jikanData.score) : (existingData?.recommendationScore || 0);
+                    const dataToSave = {
+                      id: anime.id,
+                      title: existingData?.title || anime.title,
+                      description: existingData?.description || anime.description,
+                      genres: existingData?.genres || jikanData.genres || anime.genres,
+                      streamingServices: existingData?.streamingServices || anime.streamingServices,
+                      isVisible: existingData?.isVisible ?? true,
+                      customImageUrl: existingData?.customImageUrl || '',
+                      isPublished: existingData?.isPublished ?? false,
+                      lastModified: Date.now(),
+                      recommendationScore: recommendationScore,
+                    };
+                    saveAnimeData(dataToSave);
+                    totalProcessed++;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`${year}年${seasonNames[season]}の処理でエラー:`, error);
+            }
+          }
+        }
+        
+        alert(`全シーズン一括データ取得完了！\n処理件数: ${totalProcessed}件\n- Jikan評価・ジャンルデータ: ${totalJikanData}件取得\n- 全16シーズン処理完了`);
+        fetchAnimeForAdmin();
+      } catch (error) {
+        console.error('全シーズン一括データ取得エラー:', error);
+        alert('全シーズン一括データ取得に失敗しました');
       } finally {
         setIsProcessing(false);
       }
